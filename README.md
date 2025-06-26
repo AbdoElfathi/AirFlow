@@ -86,7 +86,6 @@ python --version
 
 ### 2. Installation des Dépendances
 ```bash
-cd imagerie
 pip install -r requirements.txt
 ```
 
