@@ -40,9 +40,7 @@ imagerie/
 ├── 🔬 test_installation.py    # Script de test complet
 ├── 🎭 demo_components.py      # Démonstration des composants
 ├── 📋 requirements.txt        # Dépendances Python
-├── 📖 README.md              # Cette documentation
-├── 🚀 run.bat                # Script de lancement Windows
-└── 🚀 run.sh                 # Script de lancement Linux/Mac
+└── 📖 README.md              # Cette documentation
 ```
 
 ## 🎮 Gestes Reconnus
@@ -109,14 +107,9 @@ python demo_components.py
 python main_new.py
 ```
 
-#### Scripts Automatiques
+#### Alternative (Version Legacy)
 ```bash
-# Windows
-run.bat
-
-# Linux/Mac
-chmod +x run.sh
-./run.sh
+python main.py
 ```
 
 #### Depuis le Répertoire Parent
@@ -337,7 +330,7 @@ Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
 
 - **Langages** : Python 100%
 - **Lignes de code** : ~2000+ lignes
-- **Modules** : 12 modules principaux
+- **Modules** : 10 modules principaux
 - **Tests** : Couverture >80%
 - **Performance** : >30 FPS en temps réel
 
