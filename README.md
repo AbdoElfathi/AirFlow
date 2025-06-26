@@ -26,8 +26,7 @@ Un système de contrôle gestuel moderne et épuré pour les présentations util
 
 ```
 imagerie/
-├── 🎯 main_new.py              # Point d'entrée principal moderne
-├── 🎯 main.py                  # Version originale (legacy)
+├── 🎯 main.py              # Point d'entrée principal moderne
 ├── ⚙️  config.py               # Configuration et paramètres
 ├── 🤖 gesture_detector.py     # Détection des gestes avec MediaPipe
 ├── 🎮 presentation_controller.py # Contrôle des présentations
@@ -104,7 +103,7 @@ python demo_components.py
 
 #### Méthode Recommandée (Interface Épurée)
 ```bash
-python main_new.py
+python main.py
 ```
 
 #### Alternative (Version Legacy)

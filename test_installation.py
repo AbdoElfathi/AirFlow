@@ -160,7 +160,7 @@ def main():
         print("🎉 TOUS LES TESTS SONT RÉUSSIS!")
         print("\n🚀 Votre installation est prête!")
         print("Vous pouvez maintenant lancer:")
-        print("  python main_new.py")
+        print("  python main.py")
         
         # Proposer la démonstration
         response = input("\n❓ Voulez-vous voir la démonstration des composants? (o/n): ")
