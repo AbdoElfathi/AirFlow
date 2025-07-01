@@ -1,17 +1,16 @@
 """
-Contrôleur pour les actions de présentation
+Contrôleur simplifié pour les actions de présentation - Sans pointeur laser
 """
 import pyautogui
 import time
 
 class PresentationController:
-    """Contrôleur pour les actions de présentation"""
+    """Contrôleur simplifié pour les actions de présentation uniquement"""
     
     def __init__(self):
         # Désactiver le fail-safe de pyautogui pour éviter les interruptions
         pyautogui.FAILSAFE = False
         self.last_gesture_time = 0
-        self.current_mode = "navigation"  # "navigation" ou "laser"
         
     def execute_gesture_action(self, gesture: str, cooldown: float = 1.0):
         """Exécute l'action correspondant au geste détecté"""
@@ -24,7 +23,7 @@ class PresentationController:
         action_map = {
             "fist": self.next_slide,
             "open_hand": self.previous_slide,
-            "point": self.toggle_laser_mode,
+            "point": self.next_slide,  # Index pointer now goes to next slide
             "ok": self.toggle_fullscreen,
             "two": lambda: self.go_to_slide(2),
             "three": lambda: self.go_to_slide(3),
@@ -64,8 +63,3 @@ class PresentationController:
     def white_screen(self):
         """Écran blanc pendant la présentation"""
         pyautogui.press('w')      # PowerPoint : écran blanc
-    
-    def toggle_laser_mode(self):
-        """Basculer le mode pointeur laser"""
-        self.current_mode = "laser" if self.current_mode == "navigation" else "navigation"
-        print(f"Mode: {self.current_mode}")

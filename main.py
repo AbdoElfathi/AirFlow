@@ -1,6 +1,6 @@
 """
-Point d'entrée principal pour le contrôleur gestuel moderne
-Avec support des thèmes et interface avancée
+Point d'entrée principal pour le contrôleur gestuel
+Navigation de présentation uniquement
 """
 import sys
 import os
@@ -13,29 +13,11 @@ if current_dir not in sys.path:
 
 try:
     from gui import ModernGestureControllerGUI
-    from themes import ThemeManager, NotificationManager
 except ImportError:
     # Si l'import échoue, essayer depuis le dossier imagerie
     imagerie_path = os.path.join(os.path.dirname(__file__), '.')
     sys.path.insert(0, imagerie_path)
     from gui import ModernGestureControllerGUI
-    from themes import ThemeManager, NotificationManager
-
-def print_banner():
-    """Affiche une bannière stylée"""
-    banner = """
-    ╔══════════════════════════════════════════════════════════════╗
-    ║                                                              ║
-    ║    🎯  CONTRÔLEUR GESTUEL AVANCÉ  🎯                         ║
-    ║                                                              ║
-    ║    ✨ Intelligence Artificielle                              ║
-    ║    🎮 Vision par Ordinateur                                  ║
-    ║    🚀 Interface Moderne                                      ║
-    ║    🎨 Thèmes Personnalisables                                ║
-    ║                                                              ║
-    ╚══════════════════════════════════════════════════════════════╝
-    """
-    print(banner)
 
 def check_dependencies():
     """Vérifie les dépendances nécessaires"""
@@ -60,49 +42,36 @@ def check_dependencies():
     return True
 
 def main():
-    """Fonction principale améliorée"""
-    print_banner()
+    """Fonction principale"""
+    print("="*60)
+    print("🎯 CONTRÔLEUR GESTUEL - NAVIGATION DE PRÉSENTATION")
+    print("="*60)
     
     # Vérification des dépendances
     if not check_dependencies():
         input("Appuyez sur Entrée pour quitter...")
         return
     
-    print("\n🔧 Configuration:")
-    print("- Webcam requise et fonctionnelle")
+    print("\n🔧 Configuration requise:")
+    print("- Webcam fonctionnelle")
     print("- Présentation ouverte (PowerPoint, PDF, etc.)")
     print("- Éclairage suffisant pour la détection")
     
     print("\n📋 Instructions:")
-    print("1. Cliquez sur '▶ Démarrer' dans l'interface")
+    print("1. Cliquez sur 'Démarrer' dans l'interface")
     print("2. Utilisez les gestes devant la caméra")
-    print("3. Consultez le guide des gestes dans l'interface")
-    print("4. Appuyez sur 'q' dans la fenêtre vidéo pour quitter")
+    print("3. Appuyez sur 'q' dans la fenêtre vidéo pour quitter")
     
-    print("\n🎨 Fonctionnalités modernes:")
-    print("- Interface graphique redesignée")
-    print("- Visualisation des gestes en temps réel")
-    print("- Statistiques de performance")
-    print("- Configuration avancée")
-    print("- Thèmes personnalisables")
+    print("\n🎮 Gestes disponibles:")
+    print("- ✊ Poing fermé → Slide suivante")
+    print("- 🖐 Main ouverte → Slide précédente")
+    print("- 👆 Index pointé → Slide suivante")
+    print("- 👌 Geste OK → Démarrer/Arrêter diaporama")
     
-    print("\n" + "="*60)
-    print("🚀 Lancement de l'application...")
+    print("\n🚀 Lancement de l'application...")
     
     try:
-        # Initialisation du gestionnaire de thèmes
-        theme_manager = ThemeManager()
-        
-        # Lancement de l'application
         app = ModernGestureControllerGUI()
-        
-        # Notification de bienvenue
-        notification_manager = NotificationManager(app.root)
-        app.root.after(1000, lambda: notification_manager.show_notification(
-            "🎯 Contrôleur Gestuel Prêt!\nUtilisez les gestes pour contrôler vos présentations.", 
-            "success", 4000
-        ))
-        
         app.run()
         
     except KeyboardInterrupt:

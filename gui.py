@@ -1,625 +1,492 @@
-"""
-Interface graphique moderne épurée - Version finale sans distractions
-"""
 import cv2
 import tkinter as tk
 from tkinter import ttk, messagebox
 import time
 from threading import Thread
+import math
 from config import GestureConfig
 from gesture_detector import GestureDetector
-from laser_mode import DualModeController
+from presentation_controller import PresentationController
 
-class ModernButton(tk.Canvas):
-    """Bouton moderne avec effets hover et animations"""
+class ModernCard(tk.Frame):
+    """Carte moderne avec ombre et effets"""
     
-    def __init__(self, parent, text, command=None, bg_color="#4A90E2", hover_color="#357ABD", 
-                 text_color="white", width=120, height=40, **kwargs):
-        super().__init__(parent, width=width, height=height, highlightthickness=0, **kwargs)
+    def __init__(self, parent, bg_color="#FFFFFF", shadow_color="#E0E0E0", **kwargs):
+        super().__init__(parent, bg=shadow_color, **kwargs)
         
-        self.command = command
+        # Effet d'ombre
+        self.shadow_frame = tk.Frame(self, bg=shadow_color, height=3)
+        self.shadow_frame.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        # Contenu principal
+        self.content_frame = tk.Frame(self, bg=bg_color)
+        self.content_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+        
+    def get_content_frame(self):
+        return self.content_frame
+
+class ModernButton(tk.Button):
+    """Bouton moderne simplifié et fiable"""
+    
+    def __init__(self, parent, text, command=None, bg_color="#4285F4", hover_color="#3367D6", 
+                 text_color="white", icon="", **kwargs):
+        
+        # Configuration de base
+        super().__init__(parent, 
+                        text=f"{icon} {text}" if icon else text,
+                        command=command,
+                        bg=bg_color,
+                        fg=text_color,
+                        font=("Segoe UI", 11, "bold"),
+                        relief="flat",
+                        bd=0,
+                        padx=20,
+                        pady=12,
+                        cursor="hand2",
+                        **kwargs)
+        
         self.bg_color = bg_color
         self.hover_color = hover_color
         self.text_color = text_color
-        self.text = text
-        self.is_hovered = False
         
-        self.configure(bg=parent.cget('bg'))
-        self.draw_button()
-        
-        # Événements
-        self.bind("<Button-1>", self.on_click)
+        # Événements hover
         self.bind("<Enter>", self.on_enter)
         self.bind("<Leave>", self.on_leave)
         
-    def draw_button(self):
-        """Dessine le bouton avec bordures arrondies"""
-        self.delete("all")
-        
-        color = self.hover_color if self.is_hovered else self.bg_color
-        
-        # Ombre (sans transparence)
-        self.create_rectangle(2, 2, self.winfo_reqwidth()-2, self.winfo_reqheight()-2, 
-                            fill="#D0D0D0", outline="", width=0)
-        
-        # Bouton principal avec coins arrondis simulés
-        margin = 4
-        self.create_rectangle(margin, margin, self.winfo_reqwidth()-margin, 
-                            self.winfo_reqheight()-margin, fill=color, outline="", width=0)
-        
-        # Texte
-        self.create_text(self.winfo_reqwidth()//2, self.winfo_reqheight()//2, 
-                        text=self.text, fill=self.text_color, font=("Segoe UI", 10, "bold"))
-        
     def on_enter(self, event):
-        """Effet hover"""
-        self.is_hovered = True
-        self.draw_button()
+        self.configure(bg=self.hover_color)
         
     def on_leave(self, event):
-        """Fin effet hover"""
-        self.is_hovered = False
-        self.draw_button()
-        
-    def on_click(self, event):
-        """Gestion du clic"""
-        if self.command:
-            self.command()
+        self.configure(bg=self.bg_color)
 
-class AnimatedStatusBar(tk.Canvas):
-    """Barre de statut animée"""
+class GestureCard(tk.Frame):
+    """Carte pour afficher un geste avec animation"""
     
-    def __init__(self, parent, width=400, height=30, **kwargs):
-        super().__init__(parent, width=width, height=height, highlightthickness=0, **kwargs)
+    def __init__(self, parent, gesture_icon, gesture_name, action, color="#4285F4", **kwargs):
+        super().__init__(parent, bg="#FFFFFF", relief="flat", bd=1, **kwargs)
         
-        self.status = "Arrêté"
-        self.animation_step = 0
+        self.gesture_icon = gesture_icon
+        self.gesture_name = gesture_name
+        self.action = action
+        self.color = color
         self.is_active = False
         
-        self.configure(bg=parent.cget('bg'))
-        self.update_status()
+        self.setup_card()
+        
+    def setup_card(self):
+        """Configure la carte"""
+        # Barre colorée en haut
+        color_bar = tk.Frame(self, bg=self.color, height=5)
+        color_bar.pack(fill=tk.X)
+        
+        # Contenu
+        content = tk.Frame(self, bg="#FFFFFF")
+        content.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+        
+        # Icône grande
+        self.icon_label = tk.Label(content, text=self.gesture_icon, 
+                                  bg="#FFFFFF", font=("Segoe UI Emoji", 32))
+        self.icon_label.pack()
+        
+        # Nom du geste
+        name_label = tk.Label(content, text=self.gesture_name, 
+                             bg="#FFFFFF", fg="#333333",
+                             font=("Segoe UI", 12, "bold"))
+        name_label.pack(pady=(8, 0))
+        
+        # Action
+        action_label = tk.Label(content, text=self.action, 
+                               bg="#FFFFFF", fg="#666666",
+                               font=("Segoe UI", 10), wraplength=150)
+        action_label.pack(pady=(4, 0))
+        
+    def activate(self):
+        """Active l'animation de la carte"""
+        if not self.is_active:
+            self.is_active = True
+            self.configure(bg=self.color, relief="solid", bd=3)
+            self.icon_label.configure(bg=self.color, font=("Segoe UI Emoji", 36))
+            
+    def deactivate(self):
+        """Désactive l'animation"""
+        self.is_active = False
+        self.configure(bg="#FFFFFF", relief="flat", bd=1)
+        self.icon_label.configure(bg="#FFFFFF", font=("Segoe UI Emoji", 32))
+
+class StatusIndicator(tk.Frame):
+    """Indicateur de statut simplifié"""
+    
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, bg="#F8F9FA", relief="solid", bd=1, **kwargs)
+        
+        self.status = "Arrêté"
+        self.is_active = False
+        
+        self.status_label = tk.Label(self, text="🔴 Arrêté", 
+                                   bg="#F8F9FA", fg="#666666",
+                                   font=("Segoe UI", 10, "bold"),
+                                   padx=10, pady=8)
+        self.status_label.pack()
         
     def set_status(self, status, is_active=False):
-        """Met à jour le statut"""
         self.status = status
         self.is_active = is_active
-        self.update_status()
         
         if is_active:
-            self.animate()
-            
-    def update_status(self):
-        """Met à jour l'affichage du statut"""
-        self.delete("all")
-        
-        # Fond
-        bg_color = "#2ECC71" if self.is_active else "#95A5A6"
-        self.create_rectangle(0, 0, self.winfo_reqwidth(), self.winfo_reqheight(), 
-                             fill=bg_color, outline="")
-        
-        # Texte
-        self.create_text(self.winfo_reqwidth()//2, self.winfo_reqheight()//2, 
-                        text=f"Statut: {self.status}", fill="white", 
-                        font=("Segoe UI", 10, "bold"))
-        
-        # Animation pour le mode actif (sans transparence)
-        if self.is_active:
-            x = (self.animation_step % 100) * (self.winfo_reqwidth() / 100)
-            self.create_rectangle(x, 0, x+20, self.winfo_reqheight(), 
-                                 fill="#A8E6CF", outline="")
-            
-    def animate(self):
-        """Animation de la barre"""
-        if self.is_active:
-            self.animation_step += 2
-            self.update_status()
-            self.after(50, self.animate)
-
-class GestureVisualizer(tk.Canvas):
-    """Visualiseur de gestes en temps réel"""
-    
-    def __init__(self, parent, width=300, height=200, **kwargs):
-        super().__init__(parent, width=width, height=height, bg="#2C3E50", highlightthickness=0, **kwargs)
-        
-        self.current_gesture = "none"
-        self.gesture_colors = {
-            "fist": "#E74C3C",
-            "open_hand": "#2ECC71", 
-            "point": "#3498DB",
-            "ok": "#F39C12",
-            "two": "#9B59B6",
-            "three": "#1ABC9C",
-            "four": "#E67E22",
-            "none": "#95A5A6"
-        }
-        
-        self.draw_background()
-        
-    def draw_background(self):
-        """Dessine le fond avec grille"""
-        self.delete("all")
-        
-        # Grille
-        for i in range(0, self.winfo_reqwidth(), 20):
-            self.create_line(i, 0, i, self.winfo_reqheight(), fill="#34495E", width=1)
-        for i in range(0, self.winfo_reqheight(), 20):
-            self.create_line(0, i, self.winfo_reqwidth(), i, fill="#34495E", width=1)
-            
-        # Titre
-        self.create_text(self.winfo_reqwidth()//2, 20, text="Geste Détecté", 
-                        fill="white", font=("Segoe UI", 12, "bold"))
-        
-    def update_gesture(self, gesture):
-        """Met à jour le geste affiché"""
-        self.current_gesture = gesture
-        self.draw_gesture()
-        
-    def draw_gesture(self):
-        """Dessine la représentation du geste"""
-        self.draw_background()
-        
-        center_x = self.winfo_reqwidth() // 2
-        center_y = self.winfo_reqheight() // 2
-        
-        color = self.gesture_colors.get(self.current_gesture, "#95A5A6")
-        
-        # Cercle principal
-        radius = 50
-        self.create_oval(center_x-radius, center_y-radius, 
-                        center_x+radius, center_y+radius, 
-                        fill=color, outline="white", width=3)
-        
-        # Texte du geste
-        self.create_text(center_x, center_y, text=self.current_gesture.replace("_", " ").title(), 
-                        fill="white", font=("Segoe UI", 14, "bold"))
-        
-        # Effet de pulsation
-        if self.current_gesture != "none":
-            pulse_radius = radius + 10
-            self.create_oval(center_x-pulse_radius, center_y-pulse_radius,
-                           center_x+pulse_radius, center_y+pulse_radius,
-                           outline=color, width=2)
-
-class LaserControlPanel(tk.Frame):
-    """Panel de contrôle spécifique au mode laser épuré"""
-    
-    def __init__(self, parent, controller, colors, **kwargs):
-        super().__init__(parent, **kwargs)
-        self.controller = controller
-        self.colors = colors
-        
-        self.configure(bg=colors['light'])
-        self.create_laser_controls()
-        
-    def create_laser_controls(self):
-        """Crée les contrôles du mode laser épuré"""
-        # Titre
-        title = tk.Label(self, text="🔴 Pointeur Laser Épuré", 
-                        font=("Segoe UI", 12, "bold"), 
-                        bg=self.colors['light'], fg=self.colors['danger'])
-        title.pack(pady=(10, 5))
-        
-        # Instructions simplifiées
-        instructions = [
-            "👆 Index pointé → Basculer vers mode laser",
-            "Interface épurée sans distractions", 
-            "Raccourcis clavier disponibles",
-            "H = Afficher/masquer aide",
-            "Feedback temporaire uniquement",
-            "✊ Poing fermé → Quitter mode laser"
-        ]
-        
-        for instruction in instructions:
-            label = tk.Label(self, text=instruction, font=("Segoe UI", 9),
-                           bg=self.colors['light'], fg=self.colors['dark'],
-                           anchor="w")
-            label.pack(fill=tk.X, padx=10, pady=2)
-            
-        # Statut laser
-        self.laser_status = tk.Label(self, text="🎯 Mode: Navigation Simple", 
-                                   font=("Segoe UI", 10, "bold"),
-                                   bg=self.colors['light'], fg=self.colors['secondary'])
-        self.laser_status.pack(pady=(10, 5))
-        
-        # Couleur actuelle
-        self.color_status = tk.Label(self, text="🎨 Prêt pour le laser", 
-                                   font=("Segoe UI", 9),
-                                   bg=self.colors['light'], fg=self.colors['dark'])
-        self.color_status.pack(pady=2)
-        
-        # Taille actuelle
-        self.size_status = tk.Label(self, text="📏 Pointeur disponible", 
-                                   font=("Segoe UI", 9),
-                                   bg=self.colors['light'], fg=self.colors['dark'])
-        self.size_status.pack(pady=2)
-        
-        # Bouton de test laser
-        test_btn = ModernButton(self, "🔴 Test Laser", 
-                               command=self.test_laser,
-                               bg_color=self.colors['warning'],
-                               hover_color="#E67E22", width=100, height=30)
-        test_btn.pack(pady=5)
-        
-    def test_laser(self):
-        """Test du mode laser"""
-        self.controller.toggle_mode()
-        self.update_laser_status()
-        
-    def update_laser_status(self):
-        """Met à jour le statut du laser"""
-        mode = self.controller.current_mode
-        if mode == "laser":
-            self.laser_status.config(text="🔴 Mode: Pointeur Laser ACTIF", fg=self.colors['danger'])
-            # Afficher les infos du laser
-            color_names = {
-                "#FF0000": "Rouge", "#00FF00": "Vert", "#0000FF": "Bleu",
-                "#FFFF00": "Jaune", "#FF00FF": "Magenta", "#00FFFF": "Cyan", "#FFFFFF": "Blanc"
-            }
-            size_names = {"small": "Petite", "normal": "Normale", "large": "Grande"}
-            
-            current_color = getattr(self.controller.laser_pointer, 'current_color', '#FF0000')
-            current_size = getattr(self.controller.laser_pointer, 'pointer_size', 'normal')
-            
-            color_name = color_names.get(current_color, "Rouge")
-            size_name = size_names.get(current_size, "Normale")
-            
-            self.color_status.config(text=f"🎨 Couleur: {color_name}")
-            self.size_status.config(text=f"📏 Taille: {size_name}")
+            self.status_label.config(text=f"🟢 {status}", fg="#4CAF50")
+            self.configure(bg="#E8F5E8")
+            self.status_label.configure(bg="#E8F5E8")
         else:
-            self.laser_status.config(text="🎯 Mode: Navigation Simple", fg=self.colors['secondary'])
-            self.color_status.config(text="🎨 Prêt pour le laser")
-            self.size_status.config(text="📏 Pointeur disponible")
+            self.status_label.config(text=f"🔴 {status}", fg="#666666")
+            self.configure(bg="#F8F9FA")
+            self.status_label.configure(bg="#F8F9FA")
 
 class ModernGestureControllerGUI:
-    """Interface graphique moderne épurée pour le contrôleur gestuel"""
+    """Interface graphique moderne et responsive - 3 gestes uniquement"""
     
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("🎯 Contrôleur Gestuel Épuré - Navigation | Pointeur Laser")
-        self.root.geometry("1200x800")
+        self.root.title("🎯 Gesture Navigator Pro - Contrôle Simplifié")
+        self.root.geometry("900x650")
+        self.root.minsize(700, 500)
+        self.root.configure(bg="#F5F7FA")
         
-        # Style moderne
-        self.setup_style()
-        
+        # Configuration avec précision améliorée
         self.config = GestureConfig()
-        self.detector = GestureDetector(self.config)
-        self.controller = DualModeController()
+        # Augmenter la précision pour les 3 gestes principaux
+        self.config.min_detection_confidence = 0.8  # Plus strict
+        self.config.min_tracking_confidence = 0.8   # Plus strict
+        self.config.gesture_cooldown = 1.5          # Plus de temps entre gestes
         
+        self.detector = GestureDetector(self.config)
+        self.controller = PresentationController()
+        
+        # Variables
         self.cap = None
         self.is_running = False
         self.video_thread = None
+        self.gesture_cards = {}
+        self.current_gesture = "none"
+        self.current_fps = 0
+        self.gesture_confidence = 0.0
         
-        self.setup_modern_gui()
+        self.setup_styles()
+        self.create_interface()
         
-    def setup_style(self):
-        """Configure le style moderne"""
+        # Responsive design
+        self.root.bind("<Configure>", self.on_window_resize)
+        
+    def setup_styles(self):
+        """Configure les styles modernes"""
         self.colors = {
-            'primary': '#2C3E50',
-            'secondary': '#3498DB', 
-            'success': '#2ECC71',
-            'warning': '#F39C12',
-            'danger': '#E74C3C',
-            'light': '#ECF0F1',
-            'dark': '#34495E',
-            'accent': '#9B59B6'
+            'primary': '#4285F4',
+            'secondary': '#34A853', 
+            'accent': '#FBBC04',
+            'danger': '#EA4335',
+            'dark': '#202124',
+            'light': '#F8F9FA',
+            'card': '#FFFFFF',
+            'text_primary': '#202124',
+            'text_secondary': '#5F6368'
         }
         
-        self.root.configure(bg=self.colors['light'])
-        
-        style = ttk.Style()
-        style.theme_use('clam')
-        style.configure('Modern.TFrame', background=self.colors['light'])
-        
-    def setup_modern_gui(self):
-        """Configure l'interface moderne"""
-        # En-tête
+    def create_interface(self):
+        """Crée l'interface moderne et responsive"""
+        # En-tête fixe
         self.create_header()
         
-        # Container principal
-        main_container = ttk.Frame(self.root, style='Modern.TFrame')
-        main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        # Container principal avec scrollbar si nécessaire
+        self.main_canvas = tk.Canvas(self.root, bg="#F5F7FA", highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=self.main_canvas.yview)
+        self.main_canvas.configure(yscrollcommand=self.scrollbar.set)
         
-        # Layout en grille 3x2
-        main_container.grid_columnconfigure(0, weight=1)
-        main_container.grid_columnconfigure(1, weight=1)
-        main_container.grid_columnconfigure(2, weight=1)
-        main_container.grid_rowconfigure(1, weight=1)
+        # Frame principal dans le canvas
+        self.main_frame = tk.Frame(self.main_canvas, bg="#F5F7FA")
+        self.canvas_frame = self.main_canvas.create_window((0, 0), window=self.main_frame, anchor="nw")
         
-        # Panels
-        self.create_control_panel(main_container)
-        self.create_visualization_panel(main_container)
-        self.create_laser_panel(main_container)
-        self.create_config_panel(main_container)
-        self.create_gesture_panel(main_container)
-        self.create_modern_status_bar()
+        self.main_canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        self.scrollbar.pack(side="right", fill="y")
+        
+        # Contenu
+        self.create_responsive_content()
+        
+        # Mise à jour du scroll
+        self.main_frame.bind("<Configure>", self.update_scroll_region)
         
     def create_header(self):
-        """Crée l'en-tête"""
-        header = tk.Frame(self.root, bg=self.colors['primary'], height=80)
+        """En-tête moderne compact"""
+        header = tk.Frame(self.root, bg=self.colors['primary'], height=60)
         header.pack(fill=tk.X)
         header.pack_propagate(False)
         
-        title_label = tk.Label(header, text="🎯 Contrôleur Gestuel Épuré - Navigation | Pointeur Laser", 
-                              bg=self.colors['primary'], fg="white", 
-                              font=("Segoe UI", 18, "bold"))
-        title_label.place(relx=0.5, rely=0.3, anchor="center")
+        # Container centré
+        header_content = tk.Frame(header, bg=self.colors['primary'])
+        header_content.pack(expand=True, fill=tk.BOTH)
         
-        subtitle_label = tk.Label(header, text="Interface Épurée • Sans Distractions • Pointeur Professionnel", 
-                                 bg=self.colors['primary'], fg="#ECF0F1", 
-                                 font=("Segoe UI", 10))
-        subtitle_label.place(relx=0.5, rely=0.7, anchor="center")
+        # Titre
+        title = tk.Label(header_content, 
+                        text="🎯 Gesture Navigator Pro - Contrôle Simplifié", 
+                        bg=self.colors['primary'], fg="white",
+                        font=("Segoe UI", 16, "bold"))
+        title.pack(side=tk.LEFT, padx=20, pady=15)
         
-    def create_control_panel(self, parent):
-        """Panel de contrôle principal"""
-        control_frame = ttk.LabelFrame(parent, text=" 🎮 Contrôles Principaux ", style='Modern.TFrame')
-        control_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
+        # Badge "3 Gestes"
+        badge = tk.Label(header_content, text="3 GESTES",
+                        bg="#1A73E8", fg="white",
+                        font=("Segoe UI", 9, "bold"),
+                        padx=8, pady=4)
+        badge.pack(side=tk.RIGHT, padx=20, pady=20)
         
-        button_frame = tk.Frame(control_frame, bg=self.colors['light'])
-        button_frame.pack(pady=20)
+    def create_responsive_content(self):
+        """Crée le contenu responsive"""
+        # Section contrôles (toujours en haut)
+        self.create_control_section()
         
-        self.start_button = ModernButton(button_frame, "▶ Démarrer", 
-                                        command=self.start_detection,
-                                        bg_color=self.colors['success'], 
-                                        hover_color="#27AE60")
-        self.start_button.pack(side=tk.LEFT, padx=10)
+        # Section gestes - 3 gestes uniquement
+        self.create_gestures_section()
         
-        self.stop_button = ModernButton(button_frame, "⏹ Arrêter", 
-                                       command=self.stop_detection,
-                                       bg_color=self.colors['danger'],
-                                       hover_color="#C0392B")
-        self.stop_button.pack(side=tk.LEFT, padx=10)
+        # Section instructions simplifiées
+        self.create_instructions_section()
         
-    def create_visualization_panel(self, parent):
-        """Panel de visualisation"""
-        viz_frame = ttk.LabelFrame(parent, text=" 📊 Visualisation en Temps Réel ", style='Modern.TFrame')
-        viz_frame.grid(row=0, column=1, sticky="ew", padx=10, pady=5)
+    def create_control_section(self):
+        """Section contrôles responsive"""
+        control_frame = tk.Frame(self.main_frame, bg="#F5F7FA")
+        control_frame.pack(fill=tk.X, pady=(0, 15))
         
-        self.gesture_visualizer = GestureVisualizer(viz_frame)
-        self.gesture_visualizer.pack(pady=20)
+        # Card contrôles
+        control_card = ModernCard(control_frame, bg_color="#FFFFFF")
+        control_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         
-    def create_laser_panel(self, parent):
-        """Panel de contrôle laser"""
-        laser_frame = ttk.LabelFrame(parent, text=" 🔴 Mode Pointeur Épuré ", style='Modern.TFrame')
-        laser_frame.grid(row=0, column=2, sticky="ew", padx=10, pady=5)
+        content = control_card.get_content_frame()
         
-        self.laser_control = LaserControlPanel(laser_frame, self.controller, self.colors)
-        self.laser_control.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Titre
+        tk.Label(content, text="🎮 Contrôles",
+                bg="#FFFFFF", fg=self.colors['text_primary'],
+                font=("Segoe UI", 14, "bold")).pack(pady=(15, 10))
         
-    def create_config_panel(self, parent):
-        """Panel de configuration"""
-        config_frame = ttk.LabelFrame(parent, text=" ⚙️ Configuration Avancée ", style='Modern.TFrame')
-        config_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+        # Boutons modernes
+        button_frame = tk.Frame(content, bg="#FFFFFF")
+        button_frame.pack(pady=10)
         
-        # Sliders
-        self.cooldown_var = self.create_modern_slider(config_frame, "Délai entre gestes (s)", 
-                                                     0.5, 3.0, 1.0, self.update_cooldown)
+        self.start_btn = ModernButton(button_frame, "DÉMARRER", 
+                                     command=self.start_detection,
+                                     bg_color=self.colors['secondary'],
+                                     hover_color="#2E8B47",
+                                     icon="▶️", width=15)
+        self.start_btn.pack(pady=5)
         
-        self.detection_var = self.create_modern_slider(config_frame, "Seuil de détection", 
-                                                      0.3, 0.9, 0.7, self.update_detection_threshold)
+        self.stop_btn = ModernButton(button_frame, "ARRÊTER",
+                                    command=self.stop_detection, 
+                                    bg_color=self.colors['danger'],
+                                    hover_color="#C53929",
+                                    icon="⏹️", width=15)
+        self.stop_btn.pack(pady=5)
         
-        # Statistiques
-        stats_frame = tk.Frame(config_frame, bg=self.colors['light'])
-        stats_frame.pack(fill=tk.X, padx=20, pady=10)
+        # Card statistiques avec précision
+        stats_card = ModernCard(control_frame, bg_color="#FFFFFF")
+        stats_card.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
-        self.fps_label = tk.Label(stats_frame, text="FPS: 0", bg=self.colors['light'], 
-                                 font=("Segoe UI", 10), fg=self.colors['secondary'])
-        self.fps_label.pack()
+        stats_content = stats_card.get_content_frame()
         
-        self.gesture_count_label = tk.Label(stats_frame, text="Gestes détectés: 0", 
-                                           bg=self.colors['light'], font=("Segoe UI", 10), 
-                                           fg=self.colors['secondary'])
-        self.gesture_count_label.pack()
+        tk.Label(stats_content, text="📊 Précision",
+                bg="#FFFFFF", fg=self.colors['text_primary'],
+                font=("Segoe UI", 14, "bold")).pack(pady=(15, 10))
         
-    def create_gesture_panel(self, parent):
-        """Panel des gestes avec séparation claire"""
-        gesture_frame = ttk.LabelFrame(parent, text=" 🎮 Deux Modes Séparés ", style='Modern.TFrame')
-        gesture_frame.grid(row=1, column=1, columnspan=2, sticky="nsew", padx=10, pady=5)
+        self.fps_label = tk.Label(stats_content, text="FPS: --",
+                                 bg="#FFFFFF", fg=self.colors['text_secondary'],
+                                 font=("Segoe UI", 11))
+        self.fps_label.pack(pady=2)
         
-        # Conteneur avec onglets pour séparer les modes
-        notebook = ttk.Notebook(gesture_frame)
-        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.confidence_label = tk.Label(stats_content, text="Confiance: --%",
+                                        bg="#FFFFFF", fg=self.colors['text_secondary'],
+                                        font=("Segoe UI", 11))
+        self.confidence_label.pack(pady=2)
         
-        # Onglet Navigation Simplifié
-        nav_frame = tk.Frame(notebook, bg=self.colors['light'])
-        notebook.add(nav_frame, text="🎯 Navigation Simple")
+        self.gesture_count_label = tk.Label(stats_content, text="Gestes: 0",
+                                           bg="#FFFFFF", fg=self.colors['text_secondary'],
+                                           font=("Segoe UI", 11))
+        self.gesture_count_label.pack(pady=2)
         
-        # En-tête navigation
-        nav_header = tk.Label(nav_frame, text="CONTRÔLES DE NAVIGATION", 
-                             font=("Segoe UI", 14, "bold"), bg=self.colors['light'], 
-                             fg=self.colors['primary'])
-        nav_header.pack(pady=(10, 5))
+        # Statut
+        self.status_indicator = StatusIndicator(stats_content)
+        self.status_indicator.pack(pady=10)
         
-        nav_subtitle = tk.Label(nav_frame, text="Gestes essentiels pour contrôler vos présentations", 
-                               font=("Segoe UI", 10), bg=self.colors['light'], 
-                               fg=self.colors['dark'])
-        nav_subtitle.pack(pady=(0, 15))
+    def create_gestures_section(self):
+        """Section gestes - 3 gestes uniquement"""
+        gestures_card = ModernCard(self.main_frame, bg_color="#FFFFFF")
+        gestures_card.pack(fill=tk.X, pady=(0, 15))
         
-        nav_gestures = [
-            ("✊", "Poing fermé", "Slide suivante", self.colors['danger']),
-            ("🖐", "Main ouverte", "Slide précédente", self.colors['success']),
-            ("👌", "Geste OK", "Démarrer/Arrêter diaporama (F5)", self.colors['warning']),
-            ("👆", "Index pointé", "PASSER EN MODE POINTEUR LASER", self.colors['secondary']),
+        content = gestures_card.get_content_frame()
+        
+        # Titre avec badge
+        title_frame = tk.Frame(content, bg="#FFFFFF")
+        title_frame.pack(fill=tk.X, pady=(15, 15))
+        
+        tk.Label(title_frame, text="✋ Gestes Simplifiés (3 uniquement)",
+                bg="#FFFFFF", fg=self.colors['text_primary'],
+                font=("Segoe UI", 16, "bold")).pack(side=tk.LEFT)
+        
+        self.current_gesture_badge = tk.Label(title_frame, text="Aucun",
+                                             bg=self.colors['accent'], fg="white",
+                                             font=("Segoe UI", 10, "bold"),
+                                             padx=12, pady=6)
+        self.current_gesture_badge.pack(side=tk.RIGHT)
+        
+        # Conteneur pour les 3 gestes
+        self.gestures_container = tk.Frame(content, bg="#FFFFFF")
+        self.gestures_container.pack(fill=tk.X, padx=20, pady=(0, 20))
+        
+        # 3 gestes uniquement - Plus grands et centrés
+        self.create_simplified_gesture_grid()
+        
+    def create_simplified_gesture_grid(self):
+        """Crée une grille de 3 gestes uniquement"""
+        gestures = [
+            ("✊", "Poing", "Slide suivante", "#EA4335"),
+            ("🖐", "Main ouverte", "Slide précédente", "#34A853"),
+            ("👌", "Trois doigts", "Démarrer/Arrêter diaporama", "#FBBC04")
         ]
         
-        for icon, gesture, action, color in nav_gestures:
-            self.create_navigation_card(nav_frame, icon, gesture, action, color)
-        
-        # Note navigation
-        nav_note = tk.Label(nav_frame, 
-                           text="💡 Mode Navigation : Simple et efficace, seulement 4 gestes essentiels !",
-                           bg=self.colors['success'], fg="white", font=("Segoe UI", 10, "bold"),
-                           padx=10, pady=8)
-        nav_note.pack(fill=tk.X, padx=10, pady=(20, 10))
-        
-        # Onglet Pointeur Laser Épuré
-        laser_frame = tk.Frame(notebook, bg=self.colors['light'])
-        notebook.add(laser_frame, text="🔴 Pointeur Laser Épuré")
-        
-        # En-tête laser
-        laser_header = tk.Label(laser_frame, text="POINTEUR LASER ÉPURÉ", 
-                               font=("Segoe UI", 14, "bold"), bg=self.colors['light'], 
-                               fg=self.colors['danger'])
-        laser_header.pack(pady=(10, 5))
-        
-        laser_subtitle = tk.Label(laser_frame, text="Interface sans distractions avec feedback temporaire uniquement", 
-                                 font=("Segoe UI", 10), bg=self.colors['light'], 
-                                 fg=self.colors['dark'])
-        laser_subtitle.pack(pady=(0, 15))
-        
-        laser_gestures = [
-            ("👆", "Index pointé", "Contrôler la position du pointeur", self.colors['secondary']),
-            ("✌️", "Deux doigts", "Changer taille (feedback temporaire)", self.colors['accent']),
-            ("🤟", "Trois doigts", "Changer couleur (feedback temporaire)", self.colors['accent']),
-            ("👌", "Geste OK", "Mode dessin ON/OFF (indicateur discret)", self.colors['warning']),
-            ("🖐", "Main ouverte", "Effacer tous les dessins", self.colors['success']),
-            ("✊", "Poing fermé", "RETOUR AU MODE NAVIGATION", self.colors['danger']),
-        ]
-        
-        for icon, gesture, action, color in laser_gestures:
-            self.create_laser_card(laser_frame, icon, gesture, action, color)
+        # 3 colonnes pour les 3 gestes
+        for i, (icon, name, action, color) in enumerate(gestures):
+            card = GestureCard(self.gestures_container, icon, name, action, color)
+            card.grid(row=0, column=i, padx=10, pady=5, sticky="ew")
             
-        # Raccourcis clavier laser
-        keyboard_frame = tk.Frame(laser_frame, bg=self.colors['dark'])
-        keyboard_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
+            self.gesture_cards[name.lower().replace(" ", "_")] = card
+            
+        # Configurer les colonnes pour qu'elles s'étendent également
+        for i in range(3):
+            self.gestures_container.grid_columnconfigure(i, weight=1)
+            
+    def create_instructions_section(self):
+        """Section instructions simplifiées pour 3 gestes"""
+        instructions_card = ModernCard(self.main_frame, bg_color="#FFFFFF")
+        instructions_card.pack(fill=tk.X, pady=(0, 15))
         
-        keyboard_title = tk.Label(keyboard_frame, text="⌨️ RACCOURCIS CLAVIER (Mode Laser)", 
-                                 bg=self.colors['dark'], fg="white", 
-                                 font=("Segoe UI", 11, "bold"), pady=5)
-        keyboard_title.pack()
+        content = instructions_card.get_content_frame()
         
-        shortcuts = ["C = Couleur", "S = Taille", "D = Dessin", "X = Effacer", "H = Aide ON/OFF", "ESC = Quitter"]
-        shortcuts_text = " • ".join(shortcuts)
+        # Titre
+        tk.Label(content, text="📖 Instructions Simplifiées",
+                bg="#FFFFFF", fg=self.colors['text_primary'],
+                font=("Segoe UI", 14, "bold")).pack(pady=(15, 10))
         
-        keyboard_shortcuts = tk.Label(keyboard_frame, text=shortcuts_text,
-                                      bg=self.colors['dark'], fg="#cccccc", 
-                                      font=("Segoe UI", 9), pady=5)
-        keyboard_shortcuts.pack()
+        # Instructions en 3 colonnes
+        self.instructions_container = tk.Frame(content, bg="#FFFFFF")
+        self.instructions_container.pack(fill=tk.X, padx=15, pady=(0, 15))
         
-        # Note importante
-        note_frame = tk.Frame(gesture_frame, bg=self.colors['warning'], height=50)
-        note_frame.pack(fill=tk.X, side=tk.BOTTOM)
-        note_frame.pack_propagate(False)
+        # Trois sections d'instructions simplifiées
+        sections = [
+            ("🔧 PRÉPARATION", "#E8F5E8", "#2E7D32", [
+                "✓ Webcam fonctionnelle",
+                "✓ Présentation ouverte", 
+                "✓ Bon éclairage",
+                "✓ Distance: 60cm"
+            ]),
+            ("🎯 3 GESTES SIMPLES", "#E3F2FD", "#1565C0", [
+                "✊ Poing = Slide suivante",
+                "🖐 Main ouverte = Slide précédente",
+                "👌 Trois doigts = Démarrer/Arrêter",
+                "⏱️ Attendez 1.5s entre gestes"
+            ]),
+            ("💡 CONSEILS", "#FFF3E0", "#E65100", [
+                "• Gestes bien distincts",
+                "• Main dans le cercle bleu",
+                "• Mouvements lents et clairs", 
+                "• 'Q' pour quitter la caméra"
+            ])
+        ]
         
-        note_label = tk.Label(note_frame, 
-                             text="💡 MODE LASER : Interface épurée sans distractions - Appuyez sur H pour l'aide",
-                             bg=self.colors['warning'], fg="white", font=("Segoe UI", 10, "bold"))
-        note_label.place(relx=0.5, rely=0.5, anchor="center")
+        for i, (title, bg_color, fg_color, items) in enumerate(sections):
+            section_frame = tk.Frame(self.instructions_container, bg=bg_color, relief="solid", bd=1)
+            section_frame.grid(row=0, column=i, padx=5, pady=5, sticky="ew")
+            
+            tk.Label(section_frame, text=title, bg=bg_color, fg=fg_color,
+                    font=("Segoe UI", 11, "bold")).pack(pady=10)
+            
+            for item in items:
+                tk.Label(section_frame, text=item, bg=bg_color, fg=fg_color,
+                        font=("Segoe UI", 9), anchor="w").pack(fill=tk.X, padx=10, pady=2)
         
-    def create_navigation_card(self, parent, icon, gesture, action, color):
-        """Carte pour les gestes de navigation"""
-        card = tk.Frame(parent, bg="white", relief="solid", bd=2)
-        card.pack(fill=tk.X, padx=15, pady=4)
+        # Configurer les colonnes
+        for i in range(3):
+            self.instructions_container.grid_columnconfigure(i, weight=1)
+            
+    def on_window_resize(self, event):
+        """Gère le redimensionnement de la fenêtre"""
+        if event.widget == self.root:
+            # Mise à jour de la largeur du canvas
+            canvas_width = event.width - 30
+            self.main_canvas.itemconfig(self.canvas_frame, width=canvas_width)
+                
+    def update_scroll_region(self, event):
+        """Met à jour la région de scroll"""
+        self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all"))
         
-        # Barre colorée plus épaisse
-        color_bar = tk.Frame(card, bg=color, height=5)
-        color_bar.pack(fill=tk.X)
+    def update_gesture_display(self, gesture, confidence=0.0):
+        """Met à jour l'affichage du geste actuel avec confiance"""
+        # Désactiver toutes les cartes
+        for card in self.gesture_cards.values():
+            card.deactivate()
         
-        content_frame = tk.Frame(card, bg="white")
-        content_frame.pack(fill=tk.X, padx=15, pady=12)
+        # Activer la carte correspondante (seulement pour les 3 gestes)
+        gesture_map = {
+            "fist": "poing",
+            "open_hand": "main_ouverte", 
+            "three": "trois_doigts"
+        }
         
-        # Layout horizontal
-        icon_label = tk.Label(content_frame, text=icon, font=("Segoe UI Emoji", 22), bg="white")
-        icon_label.pack(side=tk.LEFT, padx=(0, 15))
+        mapped_gesture = gesture_map.get(gesture, "")
+        if mapped_gesture in self.gesture_cards:
+            self.gesture_cards[mapped_gesture].activate()
+            
+        # Mettre à jour le badge
+        gesture_names = {
+            "fist": "Poing",
+            "open_hand": "Main ouverte",
+            "three": "Trois doigts",
+            "none": "Aucun"
+        }
         
-        text_frame = tk.Frame(content_frame, bg="white")
-        text_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        display_name = gesture_names.get(gesture, "Aucun")
+        self.current_gesture_badge.config(text=display_name)
         
-        gesture_label = tk.Label(text_frame, text=gesture, font=("Segoe UI", 13, "bold"), 
-                                bg="white", fg=self.colors['primary'])
-        gesture_label.pack(anchor="w")
+        # Changer la couleur du badge selon le geste
+        colors = {
+            "Poing": "#EA4335",
+            "Main ouverte": "#34A853",
+            "Trois doigts": "#FBBC04",
+            "Aucun": "#757575"
+        }
         
-        action_label = tk.Label(text_frame, text=f"→ {action}", font=("Segoe UI", 11), 
-                               bg="white", fg=self.colors['dark'])
-        action_label.pack(anchor="w")
+        self.current_gesture_badge.config(bg=colors.get(display_name, "#757575"))
         
-    def create_laser_card(self, parent, icon, gesture, action, color):
-        """Carte pour les gestes du laser"""
-        card = tk.Frame(parent, bg="#f8f9fa", relief="solid", bd=1)
-        card.pack(fill=tk.X, padx=15, pady=3)
-        
-        # Barre colorée
-        color_bar = tk.Frame(card, bg=color, height=3)
-        color_bar.pack(fill=tk.X)
-        
-        content_frame = tk.Frame(card, bg="#f8f9fa")
-        content_frame.pack(fill=tk.X, padx=12, pady=8)
-        
-        # Layout horizontal
-        icon_label = tk.Label(content_frame, text=icon, font=("Segoe UI Emoji", 16), bg="#f8f9fa")
-        icon_label.pack(side=tk.LEFT, padx=(0, 10))
-        
-        text_frame = tk.Frame(content_frame, bg="#f8f9fa")
-        text_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        gesture_label = tk.Label(text_frame, text=gesture, font=("Segoe UI", 10, "bold"), 
-                                bg="#f8f9fa", fg=self.colors['primary'])
-        gesture_label.pack(anchor="w")
-        
-        action_label = tk.Label(text_frame, text=f"→ {action}", font=("Segoe UI", 9), 
-                               bg="#f8f9fa", fg=self.colors['dark'])
-        action_label.pack(anchor="w")
-        
-    def create_modern_slider(self, parent, label, min_val, max_val, initial, callback):
-        """Crée un slider moderne"""
-        frame = tk.Frame(parent, bg=self.colors['light'])
-        frame.pack(fill=tk.X, padx=20, pady=10)
-        
-        label_widget = tk.Label(frame, text=label, bg=self.colors['light'], 
-                               font=("Segoe UI", 10), fg=self.colors['primary'])
-        label_widget.pack(anchor="w")
-        
-        var = tk.DoubleVar(value=initial)
-        scale = ttk.Scale(frame, from_=min_val, to=max_val, variable=var, 
-                         orient=tk.HORIZONTAL, command=lambda v: callback(var.get()))
-        scale.pack(fill=tk.X, pady=(5, 0))
-        
-        return var
-        
-    def create_modern_status_bar(self):
-        """Crée une barre de statut moderne"""
-        status_frame = tk.Frame(self.root, bg=self.colors['primary'], height=40)
-        status_frame.pack(fill=tk.X, side=tk.BOTTOM)
-        status_frame.pack_propagate(False)
-        
-        self.status_bar = AnimatedStatusBar(status_frame, width=400, height=30)
-        self.status_bar.pack(side=tk.LEFT, padx=20, pady=5)
-        
-        # Indicateurs
-        indicators_frame = tk.Frame(status_frame, bg=self.colors['primary'])
-        indicators_frame.pack(side=tk.RIGHT, padx=20, pady=5)
-        
-        self.camera_indicator = tk.Label(indicators_frame, text="📹 Caméra: OFF", 
-                                        bg=self.colors['primary'], fg="white", 
-                                        font=("Segoe UI", 9))
-        self.camera_indicator.pack(side=tk.LEFT, padx=10)
-        
-        self.mode_indicator = tk.Label(indicators_frame, text="🎯 Mode: Navigation", 
-                                      bg=self.colors['primary'], fg="white", 
-                                      font=("Segoe UI", 9))
-        self.mode_indicator.pack(side=tk.LEFT, padx=10)
-        
-    def update_cooldown(self, value):
-        """Met à jour le délai"""
-        self.config.gesture_cooldown = value
-        
-    def update_detection_threshold(self, value):
-        """Met à jour le seuil de détection"""
-        self.config.min_detection_confidence = value
+        # Mettre à jour la confiance
+        self.gesture_confidence = confidence
+        confidence_percent = confidence * 100
+        if confidence > 0:
+            confidence_color = "#4CAF50" if confidence > 0.7 else "#FF9800" if confidence > 0.5 else "#F44336"
+            self.confidence_label.config(text=f"Confiance: {confidence_percent:.1f}%", fg=confidence_color)
+        else:
+            self.confidence_label.config(text="Confiance: --%", fg=self.colors['text_secondary'])
         
     def start_detection(self):
-        """Démarre la détection"""
+        """Démarre la détection avec précision améliorée"""
         try:
             self.cap = cv2.VideoCapture(0)
             if not self.cap.isOpened():
                 messagebox.showerror("Erreur", "Impossible d'accéder à la caméra")
                 return
             
+            # Configuration de la caméra pour une meilleure qualité
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            self.cap.set(cv2.CAP_PROP_FPS, 30)
+            
             self.is_running = True
-            self.video_thread = Thread(target=self.modern_video_loop, daemon=True)
+            self.video_thread = Thread(target=self.video_loop, daemon=True)
             self.video_thread.start()
             
-            self.status_bar.set_status("Actif - Détection en cours", True)
-            self.camera_indicator.config(text="📹 Caméra: ON", fg=self.colors['success'])
+            self.status_indicator.set_status("Détection haute précision", True)
             
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur lors du démarrage: {str(e)}")
@@ -633,20 +500,17 @@ class ModernGestureControllerGUI:
         
         cv2.destroyAllWindows()
         
-        # Désactiver le laser si actif
-        if self.controller.current_mode == "laser":
-            self.controller.toggle_mode()
+        self.status_indicator.set_status("Arrêté", False)
+        self.update_gesture_display("none", 0.0)
         
-        self.status_bar.set_status("Arrêté", False)
-        self.camera_indicator.config(text="📹 Caméra: OFF", fg="white")
-        self.gesture_visualizer.update_gesture("none")
-        self.laser_control.update_laser_status()
-        
-    def modern_video_loop(self):
-        """Boucle vidéo avec laser épuré"""
+    def video_loop(self):
+        """Boucle vidéo avec détection améliorée pour 3 gestes"""
         gesture_count = 0
         fps_counter = 0
         last_fps_time = time.time()
+        last_gesture_time = 0
+        gesture_stability_count = 0
+        required_stability = 5  # Nombre de frames consécutives pour valider un geste
         
         while self.is_running:
             ret, frame = self.cap.read()
@@ -659,6 +523,7 @@ class ModernGestureControllerGUI:
             # Calcul FPS
             if current_time - last_fps_time >= 1.0:
                 fps = fps_counter / (current_time - last_fps_time)
+                self.current_fps = fps
                 self.fps_label.config(text=f"FPS: {fps:.1f}")
                 fps_counter = 0
                 last_fps_time = current_time
@@ -670,71 +535,184 @@ class ModernGestureControllerGUI:
             landmarks = self.detector.get_landmarks(frame)
             
             if landmarks:
-                gesture = self.detector.detect_gesture(landmarks)
+                detected_gesture = self.detector.detect_gesture(landmarks)
                 
-                if gesture != "none":
-                    gesture_count += 1
-                    self.gesture_count_label.config(text=f"Gestes détectés: {gesture_count}")
-                
-                self.gesture_visualizer.update_gesture(gesture)
-                self.add_minimal_overlay(frame, gesture, landmarks, width, height)
-                
-                # Gestion du laser
-                if self.controller.current_mode == "laser" and gesture == "point":
-                    index_tip = landmarks[8]
+                # Filtrer pour ne garder que les 3 gestes autorisés
+                if detected_gesture in ["fist", "open_hand", "three"]:
+                    # Calculer une confiance basée sur la stabilité de détection
+                    if detected_gesture == self.current_gesture:
+                        gesture_stability_count += 1
+                    else:
+                        gesture_stability_count = 1
+                        self.current_gesture = detected_gesture
                     
-                    # Mettre à jour le laser plein écran
-                    self.controller.update_laser_position(index_tip.x, index_tip.y)
+                    # Confiance basée sur la stabilité
+                    confidence = min(gesture_stability_count / required_stability, 1.0)
                     
-                    # Indicateur minimal dans la caméra
-                    laser_x = int(index_tip.x * width)
-                    laser_y = int(index_tip.y * height)
-                    cv2.circle(frame, (laser_x, laser_y), 8, (0, 0, 255), -1)
-                    cv2.circle(frame, (laser_x, laser_y), 15, (0, 0, 255), 1)
+                    # Seulement exécuter si le geste est stable ET assez de temps s'est écoulé
+                    if (gesture_stability_count >= required_stability and 
+                        current_time - last_gesture_time > self.config.gesture_cooldown):
+                        
+                        gesture_count += 1
+                        self.gesture_count_label.config(text=f"Gestes: {gesture_count}")
+                        
+                        # Exécution du geste
+                        self.controller.execute_gesture_action(detected_gesture, self.config.gesture_cooldown)
+                        last_gesture_time = current_time
+                        
+                    self.update_gesture_display(detected_gesture, confidence)
                 else:
-                    self.controller.execute_gesture_action(gesture, self.config.gesture_cooldown)
+                    # Geste non reconnu ou non autorisé
+                    self.update_gesture_display("none", 0.0)
+                    gesture_stability_count = 0
+                    self.current_gesture = "none"
                 
-                # Mettre à jour l'interface
-                mode = self.controller.current_mode
-                if mode == "laser":
-                    self.mode_indicator.config(text=f"🔴 Mode: Pointeur Laser")
-                else:
-                    self.mode_indicator.config(text=f"🎯 Mode: Navigation")
-                self.laser_control.update_laser_status()
-                
+                self.add_modern_overlay(frame, detected_gesture if detected_gesture in ["fist", "open_hand", "three"] else "none")
                 self.detector.draw_landmarks(frame, landmarks, width, height)
+            else:
+                self.update_gesture_display("none", 0.0)
+                self.add_modern_overlay(frame, "none")
+                gesture_stability_count = 0
+                self.current_gesture = "none"
             
-            cv2.imshow('🎯 Contrôleur Gestuel Épuré', frame)
+            cv2.imshow('🎯 Gesture Navigator Pro - Caméra (3 Gestes)', frame)
             
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         
         self.stop_detection()
     
-    def add_minimal_overlay(self, frame, gesture, landmarks, width, height):
-        """Ajoute un overlay minimal sans distractions"""
-        # Fond semi-transparent réduit
+    def add_modern_overlay(self, frame, gesture):
+        """Overlay moderne pour la caméra - 3 gestes uniquement"""
+        height, width = frame.shape[:2]
+        
+        # Fond semi-transparent moderne
         overlay = frame.copy()
-        cv2.rectangle(overlay, (10, 10), (350, 100), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+        cv2.rectangle(overlay, (10, 10), (400, 140), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
         
-        # Informations essentielles uniquement
-        cv2.putText(frame, f"Geste: {gesture.replace('_', ' ').title()}", (20, 35), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        # Bordure moderne
+        cv2.rectangle(frame, (10, 10), (400, 140), (66, 133, 244), 2)
         
-        cv2.putText(frame, f"Mode: {self.controller.current_mode.title()}", (20, 60), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        # Texte moderne
+        cv2.putText(frame, "Gesture Navigator Pro - 3 Gestes", (20, 35), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (66, 133, 244), 2)
         
-        # Instructions contextuelles minimales
-        if self.controller.current_mode == "laser":
-            cv2.putText(frame, "MODE POINTEUR - Interface epuree", (20, 85), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        # Geste actuel
+        if gesture in ["fist", "open_hand", "three"]:
+            gesture_names = {"fist": "Poing", "open_hand": "Main Ouverte", "three": "Trois Doigts"}
+            gesture_text = f"Geste: {gesture_names[gesture]}"
+            color = (0, 255, 0)  # Vert pour geste valide
         else:
-            cv2.putText(frame, "MODE NAVIGATION", (20, 85), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            gesture_text = "Geste: Aucun reconnu"
+            color = (200, 200, 200)  # Gris pour aucun geste
+            
+        cv2.putText(frame, gesture_text, (20, 65), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        
+        # Confiance
+        confidence_text = f"Confiance: {self.gesture_confidence*100:.1f}%"
+        conf_color = (0, 255, 0) if self.gesture_confidence > 0.7 else (0, 165, 255) if self.gesture_confidence > 0.5 else (0, 0, 255)
+        cv2.putText(frame, confidence_text, (20, 90), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, conf_color, 2)
+        
+        # Statut
+        cv2.putText(frame, "Status: Haute precision (3 gestes)", (20, 115), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (76, 175, 80), 2)
+        
+        cv2.putText(frame, "Appuyez sur 'Q' pour quitter", (20, 135), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        
+        # Zone de détection améliorée - Plus précise
+        center_x, center_y = width // 2, height // 2
+        
+        # Cercle principal plus visible
+        cv2.circle(frame, (center_x, center_y), 120, (66, 133, 244), 3)
+        
+        # Cercle intérieur pour la zone optimale
+        cv2.circle(frame, (center_x, center_y), 80, (0, 255, 0), 2)
+        
+        cv2.putText(frame, "Zone optimale", (center_x - 60, center_y + 100), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+        
+        cv2.putText(frame, "Zone de detection", (center_x - 80, center_y + 140), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (66, 133, 244), 1)
+        
+        # Indicateurs de coins pour guidance précise
+        corner_size = 25
+        corner_thickness = 2
+        
+        # Coins de la zone optimale (cercle intérieur)
+        corner_offset = int(80 * 0.707)  # 80 * cos(45°) pour les coins du carré inscrit
+        
+        # Coin supérieur gauche
+        cv2.line(frame, (center_x - corner_offset, center_y - corner_offset), 
+                (center_x - corner_offset + corner_size, center_y - corner_offset), (0, 255, 0), corner_thickness)
+        cv2.line(frame, (center_x - corner_offset, center_y - corner_offset), 
+                (center_x - corner_offset, center_y - corner_offset + corner_size), (0, 255, 0), corner_thickness)
+        
+        # Coin supérieur droit
+        cv2.line(frame, (center_x + corner_offset, center_y - corner_offset), 
+                (center_x + corner_offset - corner_size, center_y - corner_offset), (0, 255, 0), corner_thickness)
+        cv2.line(frame, (center_x + corner_offset, center_y - corner_offset), 
+                (center_x + corner_offset, center_y - corner_offset + corner_size), (0, 255, 0), corner_thickness)
+        
+        # Coin inférieur gauche
+        cv2.line(frame, (center_x - corner_offset, center_y + corner_offset), 
+                (center_x - corner_offset + corner_size, center_y + corner_offset), (0, 255, 0), corner_thickness)
+        cv2.line(frame, (center_x - corner_offset, center_y + corner_offset), 
+                (center_x - corner_offset, center_y + corner_offset - corner_size), (0, 255, 0), corner_thickness)
+        
+        # Coin inférieur droit
+        cv2.line(frame, (center_x + corner_offset, center_y + corner_offset), 
+                (center_x + corner_offset - corner_size, center_y + corner_offset), (0, 255, 0), corner_thickness)
+        cv2.line(frame, (center_x + corner_offset, center_y + corner_offset), 
+                (center_x + corner_offset, center_y + corner_offset - corner_size), (0, 255, 0), corner_thickness)
+        
+        # Point central précis
+        cv2.circle(frame, (center_x, center_y), 4, (255, 255, 255), -1)
+        cv2.circle(frame, (center_x, center_y), 6, (0, 0, 0), 2)
+        
+        # Indicateur de performance et statistiques
+        perf_text = f"FPS: {self.current_fps:.0f}"
+        cv2.putText(frame, perf_text, (width - 120, height - 60), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        
+        # Indicateur du geste actuel en bas
+        if gesture in ["fist", "open_hand", "three"]:
+            actions = {"fist": "SLIDE SUIVANTE", "open_hand": "SLIDE PRECEDENTE", "three": "DEMARRER/ARRETER"}
+            action_text = actions[gesture]
+            cv2.putText(frame, f"ACTION: {action_text}", (20, height - 20), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        
+        # Indicateur de stabilité du geste
+        if hasattr(self, 'gesture_confidence') and self.gesture_confidence > 0:
+            # Barre de progression pour la confiance
+            bar_width = 200
+            bar_height = 10
+            bar_x = width - bar_width - 20
+            bar_y = height - 40
+            
+            # Fond de la barre
+            cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_width, bar_y + bar_height), (50, 50, 50), -1)
+            
+            # Barre de progression
+            progress_width = int(bar_width * self.gesture_confidence)
+            bar_color = (0, 255, 0) if self.gesture_confidence > 0.7 else (0, 165, 255) if self.gesture_confidence > 0.5 else (0, 0, 255)
+            cv2.rectangle(frame, (bar_x, bar_y), (bar_x + progress_width, bar_y + bar_height), bar_color, -1)
+            
+            # Texte de la barre
+            cv2.putText(frame, "Stabilite", (bar_x, bar_y - 5), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        
+        # Instructions pour les 3 gestes spécifiques
+        if gesture == "none":
+            instruction_text = "Faites un geste: Poing, Main ouverte ou 3 doigts"
+            cv2.putText(frame, instruction_text, (center_x - 200, center_y - 150), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
         
     def run(self):
-        """Lance l'application moderne"""
+        """Lance l'application"""
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.mainloop()
     
@@ -744,10 +722,13 @@ class ModernGestureControllerGUI:
             self.stop_detection()
         self.root.destroy()
 
-# Classe de compatibilité pour ne pas casser les imports existants
+# Alias pour compatibilité
 class GestureControllerGUI(ModernGestureControllerGUI):
     """Alias pour la compatibilité"""
     pass
+
+# Classe principale pour l'export
+ModernGestureControllerGUI = ModernGestureControllerGUI
 
 if __name__ == "__main__":
     app = ModernGestureControllerGUI()
