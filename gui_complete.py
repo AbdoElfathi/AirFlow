@@ -35,79 +35,105 @@ class ModernGestureControllerGUI:
         
     # ... [Méthodes setup_style, setup_modern_gui, create_header, etc. déjà définies] ...
     
-    def modern_video_loop(self):
-        """Boucle vidéo moderne avec statistiques et laser"""
+    def video_loop(self):
+        """Boucle vidéo avec détection améliorée pour 3 gestes"""
         gesture_count = 0
         fps_counter = 0
         last_fps_time = time.time()
+        last_gesture_time = 0
+        gesture_stability_count = 0
+        required_stability = 5  # Nombre de frames consécutives pour valider un geste
         
-        while self.is_running:
-            ret, frame = self.cap.read()
-            if not ret:
-                break
-            
-            fps_counter += 1
-            current_time = time.time()
-            
-            # Calcul FPS
-            if current_time - last_fps_time >= 1.0:
-                fps = fps_counter / (current_time - last_fps_time)
-                self.fps_label.config(text=f"FPS: {fps:.1f}")
-                fps_counter = 0
-                last_fps_time = current_time
-            
-            # Traitement standard
-            frame = cv2.flip(frame, 1)
-            height, width, _ = frame.shape
-            
-            landmarks = self.detector.get_landmarks(frame)
-            
-            if landmarks:
-                gesture = self.detector.detect_gesture(landmarks)
+        try:
+            while self.is_running:
+                ret, frame = self.cap.read()
+                if not ret or not self.is_running:
+                    break
                 
-                if gesture != "none":
-                    gesture_count += 1
-                    self.gesture_count_label.config(text=f"Gestes détectés: {gesture_count}")
+                fps_counter += 1
+                current_time = time.time()
                 
-                # Mise à jour du visualiseur
-                self.gesture_visualizer.update_gesture(gesture)
+                # Calcul FPS
+                if current_time - last_fps_time >= 1.0:
+                    fps = fps_counter / (current_time - last_fps_time)
+                    self.current_fps = fps
+                    if self.is_running:  # Vérifier avant de mettre à jour l'interface
+                        self.fps_label.config(text=f"FPS: {fps:.1f}")
+                    fps_counter = 0
+                    last_fps_time = current_time
                 
-                # Affichage moderne sur la frame
-                self.add_modern_overlay(frame, gesture, landmarks, width, height)
+                # Traitement
+                frame = cv2.flip(frame, 1)
+                height, width, _ = frame.shape
                 
-                # Gestion du mode laser
-                if self.controller.current_mode == "laser" and gesture == "point":
-                    # Obtenir la position de l'index
-                    index_tip = landmarks[8]
+                landmarks = self.detector.get_landmarks(frame)
+                
+                if landmarks and self.is_running:
+                    detected_gesture = self.detector.detect_gesture(landmarks)
                     
-                    # Mettre à jour la position du laser plein écran
-                    self.controller.update_laser_position(index_tip.x, index_tip.y)
+                    # Filtrer pour ne garder que les 3 gestes autorisés
+                    if detected_gesture in ["fist", "open_hand", "three"]:
+                        # Calculer une confiance basée sur la stabilité de détection
+                        if detected_gesture == self.current_gesture:
+                            gesture_stability_count += 1
+                        else:
+                            gesture_stability_count = 1
+                            self.current_gesture = detected_gesture
+                        
+                        # Confiance basée sur la stabilité
+                        confidence = min(gesture_stability_count / required_stability, 1.0)
+                        
+                        # Seulement exécuter si le geste est stable ET assez de temps s'est écoulé
+                        if (gesture_stability_count >= required_stability and 
+                            current_time - last_gesture_time > self.config.gesture_cooldown and
+                            self.is_running):
+                            
+                            gesture_count += 1
+                            if self.is_running:  # Vérifier avant de mettre à jour
+                                self.gesture_count_label.config(text=f"Gestes: {gesture_count}")
+                            
+                            # Exécution du geste
+                            self.controller.execute_gesture_action(detected_gesture, self.config.gesture_cooldown)
+                            last_gesture_time = current_time
+                            
+                        if self.is_running:  # Vérifier avant de mettre à jour
+                            self.update_gesture_display(detected_gesture, confidence)
+                    else:
+                        # Geste non reconnu ou non autorisé
+                        if self.is_running:
+                            self.update_gesture_display("none", 0.0)
+                        gesture_stability_count = 0
+                        self.current_gesture = "none"
                     
-                    # Afficher aussi le laser dans la fenêtre caméra
-                    laser_x = int(index_tip.x * width)
-                    laser_y = int(index_tip.y * height)
-                    cv2.circle(frame, (laser_x, laser_y), 15, (0, 0, 255), -1)
-                    cv2.circle(frame, (laser_x, laser_y), 25, (0, 0, 255), 2)
-                    cv2.putText(frame, "LASER ACTIF", (laser_x + 30, laser_y), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                    if self.is_running:
+                        self.add_modern_overlay(frame, detected_gesture if detected_gesture in ["fist", "open_hand", "three"] else "none")
+                        self.detector.draw_landmarks(frame, landmarks, width, height)
                 else:
-                    # Exécuter les actions de gestes
-                    self.controller.execute_gesture_action(gesture, self.config.gesture_cooldown)
+                    if self.is_running:
+                        self.update_gesture_display("none", 0.0)
+                        self.add_modern_overlay(frame, "none")
+                    gesture_stability_count = 0
+                    self.current_gesture = "none"
                 
-                # Mettre à jour l'indicateur de mode
-                mode = self.controller.current_mode
-                self.mode_indicator.config(text=f"🎯 Mode: {mode.title()}")
-                self.laser_control.update_laser_status()
-                
-                self.detector.draw_landmarks(frame, landmarks, width, height)
-            
-            cv2.imshow('🎯 Contrôleur Gestuel Avancé - Mode Laser', frame)
-            
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+                # Afficher seulement si on est encore en cours d'exécution
+                if self.is_running:
+                    cv2.imshow('🎯 Gesture Navigator Pro - Caméra (3 Gestes)', frame)
+                    
+                    # Vérifier les touches
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('q') or not self.is_running:
+                        break
+                else:
+                    break
         
-        self.stop_detection()
-    
+        except Exception as e:
+            print(f"Erreur dans la boucle vidéo: {e}")
+        
+        finally:
+            # Nettoyage final
+            if self.cap:
+                self.cap.release()
+            cv2.destroyAllWindows()
     def add_modern_overlay(self, frame, gesture, landmarks, width, height):
         """Ajoute un overlay moderne à la frame"""
         # Fond semi-transparent pour les infos
@@ -142,9 +168,19 @@ class ModernGestureControllerGUI:
         self.root.mainloop()
     
     def on_closing(self):
-        """Gestion de la fermeture"""
+        """Gestion de la fermeture améliorée"""
         if self.is_running:
-            self.stop_detection()
+            self.is_running = False
+            
+            # Attendre un peu pour que le thread se termine
+            if self.video_thread and self.video_thread.is_alive():
+                self.video_thread.join(timeout=1.0)
+            
+            # Libérer les ressources
+            if self.cap:
+                self.cap.release()
+            cv2.destroyAllWindows()
+        
         self.root.destroy()
 
 # Classe de compatibilité pour ne pas casser les imports existants

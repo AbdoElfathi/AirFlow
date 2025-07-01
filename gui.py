@@ -492,16 +492,60 @@ class ModernGestureControllerGUI:
             messagebox.showerror("Erreur", f"Erreur lors du démarrage: {str(e)}")
     
     def stop_detection(self):
-        """Arrête la détection"""
+        """Arrête la détection sans bloquer l'interface"""
+        if not self.is_running:
+            return  # Déjà arrêté
+        
+        # Marquer pour arrêt
         self.is_running = False
         
-        if self.cap:
-            self.cap.release()
+        # Mettre à jour l'interface immédiatement
+        self.status_indicator.set_status("Arrêt en cours...", False)
+        self.start_btn.config(state="disabled")
+        self.stop_btn.config(state="disabled")
         
-        cv2.destroyAllWindows()
+        # Forcer la mise à jour de l'interface
+        self.root.update()
         
+        # Fonction pour nettoyer les ressources en arrière-plan
+        def cleanup_resources():
+            try:
+                # Attendre que le thread se termine (max 2 secondes)
+                if self.video_thread and self.video_thread.is_alive():
+                    self.video_thread.join(timeout=2.0)
+                
+                # Libérer la caméra
+                if self.cap:
+                    self.cap.release()
+                    self.cap = None
+                
+                # Fermer les fenêtres OpenCV
+                cv2.destroyAllWindows()
+                
+                # Mettre à jour l'interface depuis le thread principal
+                self.root.after(0, self.finish_stop)
+                
+            except Exception as e:
+                print(f"Erreur lors du nettoyage: {e}")
+                # Assurer que l'interface se remet en état même en cas d'erreur
+                self.root.after(0, self.finish_stop)
+        
+        # Lancer le nettoyage dans un thread séparé pour éviter le blocage
+        cleanup_thread = Thread(target=cleanup_resources, daemon=True)
+        cleanup_thread.start()
+        
+    def finish_stop(self):
+        """Finalise l'arrêt et remet l'interface en état"""
         self.status_indicator.set_status("Arrêté", False)
         self.update_gesture_display("none", 0.0)
+        
+        # Réactiver les boutons
+        self.start_btn.config(state="normal")
+        self.stop_btn.config(state="normal")
+        
+        # Réinitialiser les statistiques
+        self.fps_label.config(text="FPS: --")
+        self.confidence_label.config(text="Confiance: --%")
         
     def video_loop(self):
         """Boucle vidéo avec détection améliorée pour 3 gestes"""
@@ -583,134 +627,43 @@ class ModernGestureControllerGUI:
         self.stop_detection()
     
     def add_modern_overlay(self, frame, gesture):
-        """Overlay moderne pour la caméra - 3 gestes uniquement"""
+        """Overlay simple et épuré pour la caméra"""
         height, width = frame.shape[:2]
         
-        # Fond semi-transparent moderne
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (10, 10), (400, 140), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
-        
-        # Bordure moderne
-        cv2.rectangle(frame, (10, 10), (400, 140), (66, 133, 244), 2)
-        
-        # Texte moderne
-        cv2.putText(frame, "Gesture Navigator Pro - 3 Gestes", (20, 35), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (66, 133, 244), 2)
-        
-        # Geste actuel
-        if gesture in ["fist", "open_hand", "three"]:
-            gesture_names = {"fist": "Poing", "open_hand": "Main Ouverte", "three": "Trois Doigts"}
-            gesture_text = f"Geste: {gesture_names[gesture]}"
-            color = (0, 255, 0)  # Vert pour geste valide
-        else:
-            gesture_text = "Geste: Aucun reconnu"
-            color = (200, 200, 200)  # Gris pour aucun geste
-            
-        cv2.putText(frame, gesture_text, (20, 65), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-        
-        # Confiance
-        confidence_text = f"Confiance: {self.gesture_confidence*100:.1f}%"
-        conf_color = (0, 255, 0) if self.gesture_confidence > 0.7 else (0, 165, 255) if self.gesture_confidence > 0.5 else (0, 0, 255)
-        cv2.putText(frame, confidence_text, (20, 90), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, conf_color, 2)
-        
-        # Statut
-        cv2.putText(frame, "Status: Haute precision (3 gestes)", (20, 115), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (76, 175, 80), 2)
-        
-        cv2.putText(frame, "Appuyez sur 'Q' pour quitter", (20, 135), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
-        
-        # Zone de détection améliorée - Plus précise
+        # Zone de détection simple - Juste un cercle
         center_x, center_y = width // 2, height // 2
         
-        # Cercle principal plus visible
-        cv2.circle(frame, (center_x, center_y), 120, (66, 133, 244), 3)
+        # Cercle de détection simple
+        cv2.circle(frame, (center_x, center_y), 100, (66, 133, 244), 2)
         
-        # Cercle intérieur pour la zone optimale
-        cv2.circle(frame, (center_x, center_y), 80, (0, 255, 0), 2)
+        # Point central
+        cv2.circle(frame, (center_x, center_y), 3, (255, 255, 255), -1)
         
-        cv2.putText(frame, "Zone optimale", (center_x - 60, center_y + 100), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
-        
-        cv2.putText(frame, "Zone de detection", (center_x - 80, center_y + 140), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (66, 133, 244), 1)
-        
-        # Indicateurs de coins pour guidance précise
-        corner_size = 25
-        corner_thickness = 2
-        
-        # Coins de la zone optimale (cercle intérieur)
-        corner_offset = int(80 * 0.707)  # 80 * cos(45°) pour les coins du carré inscrit
-        
-        # Coin supérieur gauche
-        cv2.line(frame, (center_x - corner_offset, center_y - corner_offset), 
-                (center_x - corner_offset + corner_size, center_y - corner_offset), (0, 255, 0), corner_thickness)
-        cv2.line(frame, (center_x - corner_offset, center_y - corner_offset), 
-                (center_x - corner_offset, center_y - corner_offset + corner_size), (0, 255, 0), corner_thickness)
-        
-        # Coin supérieur droit
-        cv2.line(frame, (center_x + corner_offset, center_y - corner_offset), 
-                (center_x + corner_offset - corner_size, center_y - corner_offset), (0, 255, 0), corner_thickness)
-        cv2.line(frame, (center_x + corner_offset, center_y - corner_offset), 
-                (center_x + corner_offset, center_y - corner_offset + corner_size), (0, 255, 0), corner_thickness)
-        
-        # Coin inférieur gauche
-        cv2.line(frame, (center_x - corner_offset, center_y + corner_offset), 
-                (center_x - corner_offset + corner_size, center_y + corner_offset), (0, 255, 0), corner_thickness)
-        cv2.line(frame, (center_x - corner_offset, center_y + corner_offset), 
-                (center_x - corner_offset, center_y + corner_offset - corner_size), (0, 255, 0), corner_thickness)
-        
-        # Coin inférieur droit
-        cv2.line(frame, (center_x + corner_offset, center_y + corner_offset), 
-                (center_x + corner_offset - corner_size, center_y + corner_offset), (0, 255, 0), corner_thickness)
-        cv2.line(frame, (center_x + corner_offset, center_y + corner_offset), 
-                (center_x + corner_offset, center_y + corner_offset - corner_size), (0, 255, 0), corner_thickness)
-        
-        # Point central précis
-        cv2.circle(frame, (center_x, center_y), 4, (255, 255, 255), -1)
-        cv2.circle(frame, (center_x, center_y), 6, (0, 0, 0), 2)
-        
-        # Indicateur de performance et statistiques
-        perf_text = f"FPS: {self.current_fps:.0f}"
-        cv2.putText(frame, perf_text, (width - 120, height - 60), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
-        # Indicateur du geste actuel en bas
+        # Geste actuel - Simple texte en bas
         if gesture in ["fist", "open_hand", "three"]:
-            actions = {"fist": "SLIDE SUIVANTE", "open_hand": "SLIDE PRECEDENTE", "three": "DEMARRER/ARRETER"}
-            action_text = actions[gesture]
-            cv2.putText(frame, f"ACTION: {action_text}", (20, height - 20), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            gesture_names = {"fist": "POING", "open_hand": "MAIN OUVERTE", "three": "TROIS DOIGTS"}
+            gesture_text = gesture_names[gesture]
+            
+            # Texte centré en bas
+            text_size = cv2.getTextSize(gesture_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)[0]
+            text_x = (width - text_size[0]) // 2
+            
+            # Fond simple pour le texte
+            cv2.rectangle(frame, (text_x - 10, height - 50), 
+                         (text_x + text_size[0] + 10, height - 20), (0, 0, 0), -1)
+            
+            # Texte du geste
+            cv2.putText(frame, gesture_text, (text_x, height - 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
         
-        # Indicateur de stabilité du geste
-        if hasattr(self, 'gesture_confidence') and self.gesture_confidence > 0:
-            # Barre de progression pour la confiance
-            bar_width = 200
-            bar_height = 10
-            bar_x = width - bar_width - 20
-            bar_y = height - 40
-            
-            # Fond de la barre
-            cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_width, bar_y + bar_height), (50, 50, 50), -1)
-            
-            # Barre de progression
-            progress_width = int(bar_width * self.gesture_confidence)
-            bar_color = (0, 255, 0) if self.gesture_confidence > 0.7 else (0, 165, 255) if self.gesture_confidence > 0.5 else (0, 0, 255)
-            cv2.rectangle(frame, (bar_x, bar_y), (bar_x + progress_width, bar_y + bar_height), bar_color, -1)
-            
-            # Texte de la barre
-            cv2.putText(frame, "Stabilite", (bar_x, bar_y - 5), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-        
-        # Instructions pour les 3 gestes spécifiques
+        # Instructions simples en haut à gauche (seulement si aucun geste)
         if gesture == "none":
-            instruction_text = "Faites un geste: Poing, Main ouverte ou 3 doigts"
-            cv2.putText(frame, instruction_text, (center_x - 200, center_y - 150), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+            cv2.putText(frame, "Placez votre main dans le cercle", (20, 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
         
+        # Appuyez Q pour quitter - Discret en bas à droite
+        cv2.putText(frame, "Q = Quitter", (width - 100, height - 10), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)  
     def run(self):
         """Lance l'application"""
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
